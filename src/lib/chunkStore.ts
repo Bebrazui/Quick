@@ -1,4 +1,4 @@
-import { openDB } from 'idb';
+import { openDB, type IDBPDatabase } from 'idb';
 
 interface ChunkRow {
   transferId: string;
@@ -20,16 +20,26 @@ interface TransferRow {
 const DB_NAME = 'nostr-p2p-files';
 const DB_VERSION = 1;
 
-const dbPromise = openDB(DB_NAME, DB_VERSION, {
-  upgrade(db) {
-    if (!db.objectStoreNames.contains('transfers')) {
-      db.createObjectStore('transfers', { keyPath: 'transferId' });
-    }
-    if (!db.objectStoreNames.contains('chunks')) {
-      db.createObjectStore('chunks', { keyPath: ['transferId', 'index'] });
-    }
-  },
-});
+let dbPromise: Promise<IDBPDatabase> | null = null;
+
+const getDb = () => {
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    return null;
+  }
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains('transfers')) {
+          db.createObjectStore('transfers', { keyPath: 'transferId' });
+        }
+        if (!db.objectStoreNames.contains('chunks')) {
+          db.createObjectStore('chunks', { keyPath: ['transferId', 'index'] });
+        }
+      },
+    });
+  }
+  return dbPromise;
+};
 
 function base64ToBytes(base64: string): Uint8Array {
   const bin = atob(base64);
@@ -39,7 +49,8 @@ function base64ToBytes(base64: string): Uint8Array {
 }
 
 export async function ensureTransfer(meta: Omit<TransferRow, 'receivedChunks'> & { receivedChunks?: number }) {
-  const db = await dbPromise;
+  const db = await getDb();
+  if (!db) return null;
   const existing = (await db.get('transfers', meta.transferId)) as TransferRow | undefined;
   const row: TransferRow = {
     ...meta,
@@ -50,7 +61,8 @@ export async function ensureTransfer(meta: Omit<TransferRow, 'receivedChunks'> &
 }
 
 export async function storeChunk(transferId: string, index: number, totalChunks: number, data: string) {
-  const db = await dbPromise;
+  const db = await getDb();
+  if (!db) return;
   const tx = db.transaction(['chunks', 'transfers'], 'readwrite');
   const key = [transferId, index] as [string, number];
   const existing = await tx.objectStore('chunks').get(key);
@@ -76,18 +88,23 @@ export async function storeChunk(transferId: string, index: number, totalChunks:
 }
 
 export async function getTransfer(transferId: string) {
-  const db = await dbPromise;
+  const db = await getDb();
+  if (!db) return undefined;
   return (await db.get('transfers', transferId)) as TransferRow | undefined;
 }
 
 export async function isTransferComplete(transferId: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    return false;
+  }
   const transfer = await getTransfer(transferId);
   if (!transfer) return false;
   return transfer.totalChunks > 0 && transfer.receivedChunks >= transfer.totalChunks;
 }
 
 export async function downloadChunkedTransfer(transferId: string, fallbackName?: string, fallbackMime?: string) {
-  const db = await dbPromise;
+  const db = await getDb();
+  if (!db) return;
   const transfer = (await db.get('transfers', transferId)) as TransferRow | undefined;
   if (!transfer) throw new Error('Transfer not found');
 
@@ -103,7 +120,7 @@ export async function downloadChunkedTransfer(transferId: string, fallbackName?:
     window.isSecureContext;
 
   if (useFsApi) {
-    const picker = (window as unknown as { showSaveFilePicker: (opts: object) => Promise<{ createWritable: () => Promise<{ write: (chunk: Uint8Array) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker;
+    const picker = (window as any).showSaveFilePicker;
     const handle = await picker({
       suggestedName: fileName,
       types: [{ description: 'File', accept: { [mimeType]: ['.' + fileName.split('.').pop()] } }],

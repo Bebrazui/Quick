@@ -144,7 +144,11 @@ class NostrClient {
 
   get connectedRelayCount(): number {
     let c = 0;
-    for (const s of this.relayStatus.values()) if (s === 'connected') c++;
+    this.relayStatus.forEach((s) => {
+      if (s === 'connected') {
+        c++;
+      }
+    });
     return c;
   }
 
@@ -264,6 +268,7 @@ class NostrClient {
           if (mt === 'file-meta') {
             const transferId = (p.transferId as string) || '';
             if (!transferId) return;
+	    const fileType = (p.fileType as string) === 'image' ? 'image' : 'file';
             await ensureTransfer({
               transferId,
               fileName: (p.fileName as string) || 'file',

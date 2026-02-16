@@ -11,7 +11,7 @@ interface AppState {
   showSidebar: boolean;
 }
 
-let state: AppState = {
+const initialState: AppState = {
   contacts: [],
   channels: [],
   messages: new Map(),
@@ -20,6 +20,8 @@ let state: AppState = {
   isLoggedIn: false,
   showSidebar: true,
 };
+
+let state: AppState = { ...initialState };
 
 const listeners = new Set<() => void>();
 
@@ -31,13 +33,17 @@ function getSnapshot() {
   return state;
 }
 
+function getServerSnapshot() {
+  return initialState;
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
 export function useAppState() {
-  return useSyncExternalStore(subscribe, getSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 export function setActiveChat(pubkey: string | null) {
@@ -170,15 +176,18 @@ export function getMessages(pubkey: string): DirectMessage[] {
 }
 
 function saveContacts() {
+  if (typeof window === 'undefined') return;
   const data = state.contacts.map(c => ({ pubkey: c.pubkey, name: c.name }));
   localStorage.setItem('nostr_contacts', JSON.stringify(data));
 }
 
 function saveChannels() {
+  if (typeof window === 'undefined') return;
   localStorage.setItem('nostr_channels', JSON.stringify(state.channels));
 }
 
 export function loadContacts() {
+  if (typeof window === 'undefined') return;
   try {
     const raw = localStorage.getItem('nostr_contacts');
     if (raw) {
