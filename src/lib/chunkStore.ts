@@ -103,7 +103,7 @@ export async function downloadChunkedTransfer(transferId: string, fallbackName?:
     window.isSecureContext;
 
   if (useFsApi) {
-    const picker = (window as Window & { showSaveFilePicker: (opts: object) => Promise<{ createWritable: () => Promise<{ write: (chunk: Uint8Array) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker;
+    const picker = (window as unknown as { showSaveFilePicker: (opts: object) => Promise<{ createWritable: () => Promise<{ write: (chunk: Uint8Array) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker;
     const handle = await picker({
       suggestedName: fileName,
       types: [{ description: 'File', accept: { [mimeType]: ['.' + fileName.split('.').pop()] } }],
