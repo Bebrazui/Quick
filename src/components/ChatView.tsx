@@ -5,6 +5,7 @@ import {
   Copy,
   Download,
   Hash,
+  Image as ImageIcon,
   Loader2,
   Menu,
   Paperclip,
@@ -434,7 +435,7 @@ export default function ChatView() {
           {!isChannel && (
             <div className="flex items-center gap-0.5 pb-1">
               <button onClick={() => imageInputRef.current?.click()} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Send image" disabled={sending}>
-                <NextImage className="w-5 h-5" />
+                <ImageIcon className="w-5 h-5" />
               </button>
               <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Send file" disabled={sending}>
                 <Paperclip className="w-5 h-5" />
