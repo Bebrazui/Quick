@@ -25,6 +25,7 @@ export type MessageType =
   | 'text'
   | 'image'
   | 'file'
+  | 'audio'
   | 'file-meta'
   | 'file-chunk'
   | 'channel'
@@ -43,7 +44,7 @@ export interface ReplyRef {
 }
 
 export interface Attachment {
-  type: 'image' | 'file';
+  type: 'image' | 'file' | 'audio';
   name: string;
   mimeType: string;
   data: string;
@@ -268,7 +269,7 @@ class NostrClient {
           if (mt === 'file-meta') {
             const transferId = (p.transferId as string) || '';
             if (!transferId) return;
-	    const fileType = (p.fileType as string) === 'image' ? 'image' : 'file';
+            const fileType = ['image', 'audio'].includes(p.fileType as string) ? p.fileType as ('image' | 'audio') : 'file';
             await ensureTransfer({
               transferId,
               fileName: (p.fileName as string) || 'file',
@@ -280,7 +281,7 @@ class NostrClient {
             });
             return;
           }
-          if (mt === 'image' || mt === 'file') {
+          if (mt === 'image' || mt === 'file' || mt === 'audio') {
             this.messageCallbacks.forEach(cb => cb({ id: event.id, from: event.pubkey, to: pTag[1], content: p.text || '', timestamp: event.created_at * 1000, msgType: mt, replyTo: p.replyTo as ReplyRef | undefined, attachment: { type: mt, name: p.fileName || 'file', mimeType: p.mimeType || 'application/octet-stream', data: p.data || '', size: p.size || 0 } }));
             return;
           }
@@ -297,7 +298,7 @@ class NostrClient {
     const data = p.data as string;
     if (!transferId || typeof chunkIndex !== 'number' || typeof totalChunks !== 'number' || typeof data !== 'string') return;
 
-    const fileType = (p.fileType as string) === 'image' ? 'image' : 'file';
+    const fileType = ['image', 'audio'].includes(p.fileType as string) ? p.fileType as ('image' | 'audio') : 'file';
     await ensureTransfer({
       transferId,
       fileName: (p.fileName as string) || 'file',
@@ -402,7 +403,7 @@ class NostrClient {
   }
 
   async sendEncryptedPayload(recipientPubkey: string, payload: string): Promise<string> {
-    if (!this._sk) throw new Error('Не авторизован');
+    if (!this._sk) throw new Error('Not authorized');
     const encrypted = await encrypt(this._sk, recipientPubkey, payload);
     const ev: UnsignedEvent = { kind: 4, created_at: Math.floor(Date.now() / 1000), tags: [['p', recipientPubkey]], content: encrypted, pubkey: this._pk };
     const event = finalizeEvent(ev, this._sk);
@@ -410,7 +411,7 @@ class NostrClient {
     const json = JSON.stringify(['EVENT', event]);
     const open: WebSocket[] = [];
     for (const [, ws] of this.sockets) if (ws.readyState === WebSocket.OPEN) open.push(ws);
-    if (!open.length) throw new Error('Нет подключённых релеев');
+    if (!open.length) throw new Error('No connected relays');
     open.forEach(ws => { try { ws.send(json); } catch {} });
     return event.id;
   }
@@ -467,6 +468,16 @@ class NostrClient {
     let lastId = '';
     let sent = 0;
 
+    await ensureTransfer({
+        transferId,
+        fileName: attachment.name,
+        mimeType: attachment.mimeType,
+        fileType: attachment.type,
+        size: fileSize,
+        totalChunks,
+        text: text || '',
+    });
+
     await this.sendEncryptedPayload(recipientPubkey, JSON.stringify({
       _nostr_msg_type: 'file-meta',
       transferId,
@@ -481,46 +492,45 @@ class NostrClient {
 
     for (let batch = 0; batch < totalChunks; batch += NostrClient.PARALLEL) {
       const promises: Promise<string>[] = [];
+      const localChunks: {i: number, data: string}[] = [];
+
       for (let j = 0; j < NostrClient.PARALLEL && batch + j < totalChunks; j++) {
         const i = batch + j;
+        let chunkData: string;
+
         if (file) {
           const start = i * NostrClient.CHUNK_SIZE;
           const end = Math.min(start + NostrClient.CHUNK_SIZE, fileSize);
           const bytes = new Uint8Array(await file.slice(start, end).arrayBuffer());
-          const data = this.bytesToBase64(bytes);
-          promises.push(this.sendEncryptedPayload(recipientPubkey, JSON.stringify({
-            _nostr_msg_type: 'file-chunk',
-            transferId,
-            chunkIndex: i,
-            totalChunks,
-            data,
-            fileName: attachment.name,
-            mimeType: attachment.mimeType,
-            size: fileSize,
-            text: text || '',
-            fileType: attachment.type,
-            replyTo,
-          })));
+          chunkData = this.bytesToBase64(bytes);
         } else {
           const base64ChunkSize = Math.floor((NostrClient.CHUNK_SIZE / 3) * 4);
-          const chunk = attachment.data.slice(i * base64ChunkSize, (i + 1) * base64ChunkSize);
-          promises.push(this.sendEncryptedPayload(recipientPubkey, JSON.stringify({
+          chunkData = attachment.data.slice(i * base64ChunkSize, (i + 1) * base64ChunkSize);
+        }
+        
+        localChunks.push({i, data: chunkData});
+
+        promises.push(this.sendEncryptedPayload(recipientPubkey, JSON.stringify({
             _nostr_msg_type: 'file-chunk',
             transferId,
             chunkIndex: i,
             totalChunks,
-            data: chunk,
+            data: chunkData,
             fileName: attachment.name,
             mimeType: attachment.mimeType,
             size: fileSize,
             text: text || '',
             fileType: attachment.type,
             replyTo,
-          })));
-        }
+        })));
       }
       const ids = await Promise.all(promises);
       lastId = ids[ids.length - 1] || lastId;
+
+      for (const chunk of localChunks) {
+          await storeChunk(transferId, chunk.i, totalChunks, chunk.data);
+      }
+
       sent += promises.length;
       onProgress?.(sent, totalChunks);
       if (sent < totalChunks) await new Promise(r => setTimeout(r, 50));
@@ -607,7 +617,7 @@ class NostrClient {
   getProfile(pubkey: string) { return this.profileCache.get(pubkey) || null; }
 
   async updateProfile(profile: NostrProfile) {
-    if (!this._sk) throw new Error('Не авторизован');
+    if (!this._sk) throw new Error('Not authorized');
     const ev: UnsignedEvent = { kind: 0, created_at: Math.floor(Date.now() / 1000), tags: [], content: JSON.stringify(profile), pubkey: this._pk };
     const event = finalizeEvent(ev, this._sk);
     const json = JSON.stringify(['EVENT', event]);

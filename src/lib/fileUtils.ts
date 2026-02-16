@@ -3,9 +3,14 @@ import type { Attachment } from './nostr';
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024;
 const INLINE_LIMIT = 8 * 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+const AUDIO_TYPES = ['audio/webm', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/aac'];
 
 export function isImageType(mimeType: string): boolean {
   return IMAGE_TYPES.includes(mimeType);
+}
+
+export function isAudioType(mimeType: string): boolean {
+  return AUDIO_TYPES.includes(mimeType) || mimeType.startsWith('audio/');
 }
 
 export function formatFileSize(bytes: number): string {
@@ -61,11 +66,20 @@ export async function processFile(file: File): Promise<Attachment> {
   }
 
   const isImage = isImageType(file.type);
-  const mimeType = isImage ? 'image/jpeg' : (file.type || 'application/octet-stream');
+  const isAudio = isAudioType(file.type);
+  let mimeType = file.type || 'application/octet-stream';
+  let attachmentType: 'image' | 'file' | 'audio' = 'file';
+
+  if (isImage) {
+      attachmentType = 'image';
+      mimeType = 'image/jpeg';
+  } else if (isAudio) {
+      attachmentType = 'audio';
+  }
 
   if (file.size > INLINE_LIMIT) {
     return {
-      type: isImage ? 'image' : 'file',
+      type: attachmentType,
       name: file.name,
       mimeType,
       data: '',
@@ -80,7 +94,7 @@ export async function processFile(file: File): Promise<Attachment> {
     : await fileToBase64(file);
 
   return {
-    type: isImage ? 'image' : 'file',
+    type: attachmentType,
     name: file.name,
     mimeType,
     data: base64,

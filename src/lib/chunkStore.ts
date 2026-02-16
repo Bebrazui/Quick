@@ -10,7 +10,7 @@ interface TransferRow {
   transferId: string;
   fileName: string;
   mimeType: string;
-  fileType: 'image' | 'file';
+  fileType: 'image' | 'file' | 'audio';
   size: number;
   totalChunks: number;
   receivedChunks: number;
@@ -102,39 +102,37 @@ export async function isTransferComplete(transferId: string): Promise<boolean> {
   return transfer.totalChunks > 0 && transfer.receivedChunks >= transfer.totalChunks;
 }
 
-export async function downloadChunkedTransfer(transferId: string, fallbackName?: string, fallbackMime?: string) {
+export async function downloadChunkedTransfer(
+  transferId: string,
+  fallbackName?: string,
+  fallbackMime?: string,
+): Promise<void>;
+export async function downloadChunkedTransfer(
+  transferId: string,
+  fallbackName: string | undefined,
+  fallbackMime: string | undefined,
+  returnBlob: true,
+): Promise<Blob | null>;
+export async function downloadChunkedTransfer(
+  transferId: string,
+  fallbackName?: string,
+  fallbackMime?: string,
+  returnBlob = false,
+): Promise<Blob | null | void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) return returnBlob ? null : undefined;
+
   const transfer = (await db.get('transfers', transferId)) as TransferRow | undefined;
-  if (!transfer) throw new Error('Transfer not found');
+  if (!transfer) {
+    console.error('Transfer not found:', transferId);
+    return returnBlob ? null : undefined;
+  }
 
   const fileName = fallbackName || transfer.fileName || 'file';
   const mimeType = fallbackMime || transfer.mimeType || 'application/octet-stream';
 
   const range = IDBKeyRange.bound([transferId, 0], [transferId, Number.MAX_SAFE_INTEGER]);
   const store = db.transaction('chunks', 'readonly').objectStore('chunks');
-
-  const useFsApi =
-    typeof window !== 'undefined' &&
-    'showSaveFilePicker' in window &&
-    window.isSecureContext;
-
-  if (useFsApi) {
-    const picker = (window as any).showSaveFilePicker;
-    const handle = await picker({
-      suggestedName: fileName,
-      types: [{ description: 'File', accept: { [mimeType]: ['.' + fileName.split('.').pop()] } }],
-    });
-    const writable = await handle.createWritable();
-    let cursor = await store.openCursor(range);
-    while (cursor) {
-      const row = cursor.value as ChunkRow;
-      await writable.write(base64ToBytes(row.data));
-      cursor = await cursor.continue();
-    }
-    await writable.close();
-    return;
-  }
 
   const parts: Uint8Array[] = [];
   let cursor = await store.openCursor(range);
@@ -143,7 +141,18 @@ export async function downloadChunkedTransfer(transferId: string, fallbackName?:
     parts.push(base64ToBytes(row.data));
     cursor = await cursor.continue();
   }
+
+  if (parts.length === 0) {
+    console.error('No chunks found for transfer:', transferId);
+    return returnBlob ? null : undefined;
+  }
+
   const blob = new Blob(parts, { type: mimeType });
+
+  if (returnBlob) {
+    return blob;
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -153,3 +162,4 @@ export async function downloadChunkedTransfer(transferId: string, fallbackName?:
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+

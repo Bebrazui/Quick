@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Menu,
+  Mic,
   Paperclip,
   Phone,
   Reply,
@@ -33,6 +34,8 @@ import { downloadChunkedTransfer } from '../lib/chunkStore';
 import { downloadAttachment, formatFileSize, getFileIcon, processFile } from '../lib/fileUtils';
 import { webrtcManager } from '../lib/webrtc';
 import Avatar from './Avatar';
+import AudioRecorder from './AudioRecorder';
+import AudioPlayer from './AudioPlayer';
 
 function Highlight({ text, highlight }: { text: string; highlight: string }) {
   if (!highlight.trim()) {
@@ -72,6 +75,7 @@ export default function ChatView() {
   const [copied, setCopied] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +109,7 @@ export default function ChatView() {
     setSendProgress(null);
     setReplyTo(null);
     setError('');
+    setIsRecordingAudio(false);
   }, [activeChat, isChannel, channelId]);
 
   useEffect(() => {
@@ -148,6 +153,7 @@ export default function ChatView() {
     setSending(true);
     setError('');
     setSendProgress(null);
+    setIsRecordingAudio(false);
 
     try {
       if (isChannel) {
@@ -192,11 +198,50 @@ export default function ChatView() {
     setError('');
     try {
       const attachment = await processFile(file);
-      if (attachment) setPendingAttachment(attachment);
+      if (attachment) {
+          setPendingAttachment(attachment);
+          setIsRecordingAudio(false);
+      }
     } catch (err) {
       setError((err as Error).message);
     }
   }, []);
+
+  const handleAudioSend = useCallback(async (audioBlob: Blob) => {
+    const file = new File([audioBlob], 'voice-message.webm', { type: 'audio/webm' });
+    setError('');
+    try {
+      const attachment = await processFile(file);
+      if (attachment) {
+        setPendingAttachment(attachment);
+        setIsRecordingAudio(false);
+
+        if (!activeChat || sending) return;
+        setSending(true);
+        setError('');
+        
+        try {
+          const msg = await nostrClient.sendAttachment(
+            activeChat,
+            attachment,
+            '',
+            (sent, total) => setSendProgress({ sent, total }),
+            replyTo || undefined,
+          );
+          addMessage(msg);
+          setMessages(getMessages(activeChat));
+          setPendingAttachment(null);
+        } catch (err) {
+          setError((err as Error).message || 'Failed to send');
+        } finally {
+          setSending(false);
+          setSendProgress(null);
+        }
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    }
+}, [activeChat, sending, replyTo]);
 
   const handleCopy = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text);
@@ -315,6 +360,12 @@ export default function ChatView() {
                     <NextImage src={`data:${msg.attachment.mimeType};base64,${msg.attachment.data}`} alt={msg.attachment.name} width={300} height={200} className="max-w-full max-h-64 rounded-t-2xl object-cover" />
                   </div>
                 )}
+                
+                {msg.msgType === 'audio' && msg.attachment && (
+                    <div className="px-2 py-1">
+                        <AudioPlayer message={msg} isMe={isMe} />
+                    </div>
+                )}
 
                 {msg.attachment && msg.msgType === 'file' && (
                   <div className="flex items-center gap-3 px-3.5 pt-3 cursor-pointer" onClick={() => handleDownload(msg)}>
@@ -372,7 +423,7 @@ export default function ChatView() {
       </div>
 
       <AnimatePresence>
-        {replyTo && (
+        {replyTo && !isRecordingAudio && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-4 py-2 border-t border-border bg-bg-secondary/40 overflow-hidden">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -386,7 +437,7 @@ export default function ChatView() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {pendingAttachment && (
+        {pendingAttachment && !isRecordingAudio && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-4 border-t border-border bg-bg-secondary/30 overflow-hidden">
             <div className="py-3 flex items-center gap-3">
               {pendingAttachment.type === 'image' && pendingAttachment.data ? (
@@ -406,6 +457,10 @@ export default function ChatView() {
             </div>
           </motion.div>
         )}
+      </AnimatePresence>
+      
+      <AnimatePresence>
+          {isRecordingAudio && <AudioRecorder onSend={handleAudioSend} onCancel={() => setIsRecordingAudio(false)} />}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -436,41 +491,49 @@ export default function ChatView() {
       </AnimatePresence>
 
       <div className="px-4 py-3 border-t border-border bg-bg-secondary/30">
-        <div className="flex items-end gap-2">
-          {!isChannel && (
-            <div className="flex items-center gap-0.5 pb-1">
-              <button onClick={() => imageInputRef.current?.click()} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Send image" disabled={sending}>
-                <ImageIcon className="w-5 h-5" />
-              </button>
-              <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Send file" disabled={sending}>
-                <Paperclip className="w-5 h-5" />
-              </button>
+          {!isRecordingAudio && (
+            <div className="flex items-end gap-2">
+            {!isChannel && (
+                <div className="flex items-center gap-0.5 pb-1">
+                <button onClick={() => imageInputRef.current?.click()} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Send image" disabled={sending}>
+                    <ImageIcon className="w-5 h-5" />
+                </button>
+                <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Send file" disabled={sending}>
+                    <Paperclip className="w-5 h-5" />
+                </button>
+                </div>
+            )}
+
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
+
+            <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                }
+                }}
+                placeholder={pendingAttachment ? 'Add caption...' : (isChannel ? 'Post message to channel...' : 'Write message...')}
+                rows={1}
+                disabled={sending}
+                className="flex-1 bg-bg-tertiary border border-border rounded-xl px-4 py-3 text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent/50 resize-none max-h-32 disabled:opacity-50"
+                style={{ minHeight: '44px' }}
+            />
+
+            {!input.trim() && !pendingAttachment && !isChannel ? (
+                <motion.button whileHover={{ scale: sending ? 1 : 1.05 }} whileTap={{ scale: sending ? 1 : 0.95 }} onClick={() => setIsRecordingAudio(true)} disabled={sending} className="p-3 bg-accent hover:bg-accent-hover disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl transition-colors shrink-0">
+                    <Mic className="w-5 h-5" />
+                </motion.button>
+            ) : (
+                <motion.button whileHover={{ scale: sending ? 1 : 1.05 }} whileTap={{ scale: sending ? 1 : 0.95 }} onClick={handleSend} disabled={(!input.trim() && !pendingAttachment) || sending} className="p-3 bg-accent hover:bg-accent-hover disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl transition-colors shrink-0">
+                    {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                </motion.button>
+            )}
             </div>
-          )}
-
-          <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
-
-          <textarea
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder={pendingAttachment ? 'Add caption...' : (isChannel ? 'Post message to channel...' : 'Write message...')}
-            rows={1}
-            disabled={sending}
-            className="flex-1 bg-bg-tertiary border border-border rounded-xl px-4 py-3 text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent/50 resize-none max-h-32 disabled:opacity-50"
-            style={{ minHeight: '44px' }}
-          />
-
-          <motion.button whileHover={{ scale: sending ? 1 : 1.05 }} whileTap={{ scale: sending ? 1 : 0.95 }} onClick={handleSend} disabled={(!input.trim() && !pendingAttachment) || sending} className="p-3 bg-accent hover:bg-accent-hover disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl transition-colors shrink-0">
-            {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </motion.button>
-        </div>
+        )}
       </div>
 
       <AnimatePresence>
