@@ -7,7 +7,7 @@ import { useAppState } from '../lib/store';
 import Avatar from './Avatar';
 
 export default function CallOverlay() {
-  const { contacts } = useAppState();
+  const { contacts, isLoggedIn } = useAppState();
   const [callState, setCallState] = useState<CallState>('idle');
   const [remotePubkey, setRemotePubkey] = useState<string | null>(null);
   const [callType, setCallType] = useState<CallType>('audio');
@@ -21,13 +21,27 @@ export default function CallOverlay() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
+  // Effect for handling login/logout
+  useEffect(() => {
+    if (!isLoggedIn) {
+      webrtcManager.endCall(); // Force end call on logout
+      // Also reset component state immediately
+      setCallState('idle');
+      setRemotePubkey(null);
+      setLocalStream(null);
+      setRemoteStream(null);
+      setElapsed(0);
+    }
+  }, [isLoggedIn]);
+
+  // Effect for managing webrtc lifecycle and subscriptions
   useEffect(() => {
     webrtcManager.init();
 
     const unsubState = webrtcManager.onStateChange((state, pubkey, type, error) => {
       setCallState(state);
       setRemotePubkey(pubkey);
-      setCallType(type);
+      setCallType(type || 'audio');
       if (error) {
         setCallError(error);
         setTimeout(() => setCallError(null), 4000);
@@ -36,6 +50,9 @@ export default function CallOverlay() {
         setMuted(false);
         setVideoOff(false);
         setElapsed(0);
+        setRemotePubkey(null);
+        setLocalStream(null);
+        setRemoteStream(null);
       }
     });
 
@@ -47,7 +64,7 @@ export default function CallOverlay() {
     return () => {
       unsubState();
       unsubStream();
-      webrtcManager.destroy();
+      webrtcManager.destroy(); // Cleans up nostr subscription on unmount
     };
   }, []);
 
@@ -64,7 +81,10 @@ export default function CallOverlay() {
   }, [remoteStream]);
 
   useEffect(() => {
-    if (callState !== 'connected') return;
+    if (callState !== 'connected') {
+      setElapsed(0);
+      return;
+    }
     const interval = setInterval(() => {
       setElapsed(Math.floor((Date.now() - webrtcManager.callStartTime) / 1000));
     }, 1000);
@@ -82,7 +102,7 @@ export default function CallOverlay() {
   }, []);
 
   const contact = remotePubkey ? contacts.find(c => c.pubkey === remotePubkey) : null;
-  const displayName = contact?.name || (remotePubkey ? nostrClient.shortenKey(remotePubkey) : 'Неизвестный');
+  const displayName = contact?.name || (remotePubkey ? nostrClient.shortenKey(remotePubkey) : 'Unknown');
 
   const formatElapsed = (s: number) => {
     const m = Math.floor(s / 60);
@@ -90,10 +110,8 @@ export default function CallOverlay() {
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
-  // Показать ошибку даже когда звонок не активен
   if (callState === 'idle' && !callError) return null;
 
-  // Только ошибка — маленький тост
   if (callState === 'idle' && callError) {
     return (
       <AnimatePresence>
@@ -118,10 +136,8 @@ export default function CallOverlay() {
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[100] flex items-center justify-center"
       >
-        {/* Фон */}
         <div className="absolute inset-0 bg-bg/95 backdrop-blur-xl" />
 
-        {/* Видео для видеозвонка */}
         {callType === 'video' && callState === 'connected' && (
           <>
             <video
@@ -148,7 +164,6 @@ export default function CallOverlay() {
           </>
         )}
 
-        {/* Аудиозвонок / Вызов / Входящий */}
         {(callType === 'audio' || callState !== 'connected') && (
           <div className="relative z-10 flex flex-col items-center">
             {(callState === 'calling' || callState === 'ringing') && (
@@ -189,12 +204,12 @@ export default function CallOverlay() {
               className="mt-2 text-sm text-text-secondary"
             >
               {callState === 'calling' && (
-                <span className="animate-call-pulse">Вызов...</span>
+                <span className="animate-call-pulse">Calling...</span>
               )}
               {callState === 'ringing' && (
                 <span className="animate-call-pulse flex items-center gap-2">
                   <PhoneIncoming className="w-4 h-4" />
-                  Входящий {callType === 'video' ? 'видео' : 'аудио'} звонок
+                  Incoming {callType} call
                 </span>
               )}
               {callState === 'connected' && (
@@ -204,7 +219,6 @@ export default function CallOverlay() {
           </div>
         )}
 
-        {/* Инфо видеозвонка */}
         {callType === 'video' && callState === 'connected' && (
           <div className="absolute top-4 left-4 z-10 flex items-center gap-3 bg-black/50 backdrop-blur-sm rounded-2xl px-4 py-2">
             <Avatar pubkey={remotePubkey || ''} name={contact?.name} picture={contact?.picture} size="xs" showBorder />
@@ -215,14 +229,12 @@ export default function CallOverlay() {
           </div>
         )}
 
-        {/* Кнопки управления */}
         <motion.div
           initial={{ y: 50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.3 }}
           className="absolute bottom-8 sm:bottom-12 left-0 right-0 flex items-center justify-center gap-4 z-10"
         >
-          {/* Входящий: Принять / Отклонить */}
           {callState === 'ringing' && (
             <>
               <motion.button
@@ -244,7 +256,6 @@ export default function CallOverlay() {
             </>
           )}
 
-          {/* В звонке */}
           {(callState === 'calling' || callState === 'connected') && (
             <>
               <motion.button
