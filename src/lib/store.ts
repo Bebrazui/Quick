@@ -198,16 +198,7 @@ export function loadContacts() {
 }
 
 export function loadChannels() {
-  try {
-    const raw = localStorage.getItem('nostr_channels');
-    if (!raw) return;
-    const channels = JSON.parse(raw) as Channel[];
-    state = { ...state, channels };
-    nostrClient.setChannels(channels.map(c => c.id));
-    notify();
-  } catch {
-    // ignore
-  }
+  // No-op. Channels are now added dynamically.
 }
 
 export function useRelayStatuses() {

@@ -384,14 +384,15 @@ class NostrClient {
   }
 
   private subscribeToChannels(relayUrl: string) {
-    const ws = this.sockets.get(relayUrl); if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const ws = this.sockets.get(relayUrl);
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (this._channels.length === 0) return; // Do not subscribe to global channels
+
     const subId = 'ch-' + Math.random().toString(36).slice(2, 8);
     const since = Math.floor(Date.now() / 1000) - 86400 * 30;
-    if (this._channels.length > 0) {
-      ws.send(JSON.stringify(['REQ', subId, { kinds: [40], ids: this._channels, since }, { kinds: [42], '#e': this._channels, since }]));
-    } else {
-      ws.send(JSON.stringify(['REQ', subId, { kinds: [40], limit: 50, since }]));
-    }
+
+    // Only subscribe to channels the user has joined
+    ws.send(JSON.stringify(['REQ', subId, { kinds: [40], ids: this._channels, since }, { kinds: [42], '#e': this._channels, since }]));
     this.subscriptions.set(subId, { filters: [], relay: relayUrl });
   }
 

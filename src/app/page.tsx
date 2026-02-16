@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useAppState, setLoggedIn, loadContacts, loadChannels } from "@/lib/store";
+import { useAppState, setLoggedIn, loadContacts } from "@/lib/store";
 import { nostrClient } from "@/lib/nostr";
 import LoginScreen from "@/components/LoginScreen";
 import Sidebar from "@/components/Sidebar";
@@ -18,7 +18,6 @@ export default function HomePage() {
         setLoggedIn(true);
         await nostrClient.connectToRelays();
         loadContacts();
-        loadChannels();
       }
     };
     autoLogin();
