@@ -5,16 +5,17 @@ import {
   Copy,
   Download,
   Hash,
-  Image,
   Loader2,
   Menu,
   Paperclip,
   Phone,
   Reply,
   Send,
+  Search,
   Video,
   X,
 } from 'lucide-react';
+import NextImage from 'next/image';
 import { nostrClient, type Attachment, type DirectMessage, type ReplyRef } from '../lib/nostr';
 import {
   addChannelMessage,
@@ -30,6 +31,28 @@ import { downloadAttachment, formatFileSize, getFileIcon, processFile } from '..
 import { webrtcManager } from '../lib/webrtc';
 import Avatar from './Avatar';
 
+function Highlight({ text, highlight }: { text: string; highlight: string }) {
+  if (!highlight.trim()) {
+    return <span>{text}</span>;
+  }
+  const regex = new RegExp(`(${highlight})`, 'gi');
+  const parts = text.split(regex);
+
+  return (
+    <span>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-yellow-300 text-black rounded-sm">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </span>
+  );
+}
+
 export default function ChatView() {
   const { activeChat, contacts, channels } = useAppState();
   const isChannel = !!activeChat && activeChat.startsWith('channel:');
@@ -44,13 +67,28 @@ export default function ChatView() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const contact = useMemo(() => contacts.find(c => c.pubkey === activeChat), [contacts, activeChat]);
   const channel = useMemo(() => channels.find(c => c.id === channelId), [channels, channelId]);
+
+  useEffect(() => {
+    if (isSearchVisible) {
+      searchInputRef.current?.focus();
+    }
+  }, [isSearchVisible]);
+
+  const filteredMessages = useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    return messages.filter(msg => msg.content?.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [messages, searchQuery]);
+
 
   useEffect(() => {
     if (!activeChat) return;
@@ -96,8 +134,9 @@ export default function ChatView() {
   }, [activeChat, contacts, channels, isChannel, channelId]);
 
   useEffect(() => {
+    if (searchQuery) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, searchQuery]);
 
   const handleSend = async () => {
     if ((!input.trim() && !pendingAttachment) || !activeChat || sending) return;
@@ -198,27 +237,62 @@ export default function ChatView() {
         )}
 
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-text truncate">
-            {isChannel ? `# ${channel?.name || nostrClient.shortenKey(channelId)}` : (contact?.name || nostrClient.shortenKey(activeChat))}
-          </div>
-          <div className="text-[10px] text-text-muted">
-            {isChannel ? 'Public channel over relays' : 'Encrypted DM over relays'}
-          </div>
+          <AnimatePresence initial={false} mode="wait">
+            <motion.div
+              key={isSearchVisible ? 'search' : 'title'}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="w-full"
+            >
+              {isSearchVisible ? (
+                <div className="relative w-full">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search in chat..."
+                    className="w-full bg-bg-tertiary border border-border rounded-lg pl-8 pr-8 py-1 text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent/50"
+                  />
+                  <button onClick={() => { setIsSearchVisible(false); setSearchQuery(''); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="text-sm font-medium text-text truncate">
+                    {isChannel ? `# ${channel?.name || nostrClient.shortenKey(channelId)}` : (contact?.name || nostrClient.shortenKey(activeChat))}
+                  </div>
+                  <div className="text-[10px] text-text-muted">
+                    {isChannel ? 'Public channel over relays' : 'Encrypted DM over relays'}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
-        {!isChannel && (
-          <div className="flex items-center gap-1">
-            <button onClick={() => handleCall('audio')} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-green transition-colors" title="Audio call"><Phone className="w-4 h-4" /></button>
-            <button onClick={() => handleCall('video')} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Video call"><Video className="w-4 h-4" /></button>
-            <button onClick={() => handleCopy(activeChat, 'header')} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-secondary transition-colors" title="Copy key">
-              {copied === 'header' ? <Check className="w-4 h-4 text-green" /> : <Copy className="w-4 h-4" />}
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          <button onClick={() => setIsSearchVisible(!isSearchVisible)} className={`p-2 rounded-lg hover:bg-bg-hover transition-colors ${isSearchVisible ? 'bg-bg-tertiary text-accent' : 'text-text-muted hover:text-text-secondary'}`} title="Search">
+            <Search className="w-4 h-4" />
+          </button>
+          {!isChannel && (
+            <>
+              <button onClick={() => handleCall('audio')} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-green transition-colors" title="Audio call"><Phone className="w-4 h-4" /></button>
+              <button onClick={() => handleCall('video')} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Video call"><Video className="w-4 h-4" /></button>
+              <button onClick={() => handleCopy(activeChat, 'header')} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-secondary transition-colors" title="Copy key">
+                {copied === 'header' ? <Check className="w-4 h-4 text-green" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-        {messages.map(msg => {
+        {filteredMessages.map(msg => {
           const isMe = msg.from === nostrClient.publicKey;
           return (
             <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -232,7 +306,7 @@ export default function ChatView() {
 
                 {msg.msgType === 'image' && msg.attachment && !msg.attachment.chunked && (
                   <div className="cursor-pointer" onClick={() => setPreviewImage(`data:${msg.attachment!.mimeType};base64,${msg.attachment!.data}`)}>
-                    <img src={`data:${msg.attachment.mimeType};base64,${msg.attachment.data}`} alt={msg.attachment.name} className="max-w-full max-h-64 rounded-t-2xl object-cover" />
+                    <NextImage src={`data:${msg.attachment.mimeType};base64,${msg.attachment.data}`} alt={msg.attachment.name} width={300} height={200} className="max-w-full max-h-64 rounded-t-2xl object-cover" />
                   </div>
                 )}
 
@@ -262,7 +336,9 @@ export default function ChatView() {
 
                 {msg.content && (
                   <div className="px-3.5 py-2.5">
-                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                    <p className="whitespace-pre-wrap break-words">
+                      <Highlight text={msg.content} highlight={searchQuery} />
+                    </p>
                   </div>
                 )}
 
@@ -309,7 +385,7 @@ export default function ChatView() {
             <div className="py-3 flex items-center gap-3">
               {pendingAttachment.type === 'image' && pendingAttachment.data ? (
                 <div className="w-16 h-16 rounded-xl overflow-hidden border border-border shrink-0">
-                  <img src={`data:${pendingAttachment.mimeType};base64,${pendingAttachment.data}`} alt="" className="w-full h-full object-cover" />
+                  <NextImage src={`data:${pendingAttachment.mimeType};base64,${pendingAttachment.data}`} alt="Attachment preview" width={64} height={64} className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div className="w-16 h-16 rounded-xl bg-bg-tertiary border border-border flex items-center justify-center text-2xl shrink-0">{getFileIcon(pendingAttachment.mimeType)}</div>
@@ -358,7 +434,7 @@ export default function ChatView() {
           {!isChannel && (
             <div className="flex items-center gap-0.5 pb-1">
               <button onClick={() => imageInputRef.current?.click()} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Send image" disabled={sending}>
-                <Image className="w-5 h-5" />
+                <NextImage className="w-5 h-5" />
               </button>
               <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg hover:bg-bg-hover text-text-muted hover:text-accent transition-colors" title="Send file" disabled={sending}>
                 <Paperclip className="w-5 h-5" />
@@ -397,7 +473,9 @@ export default function ChatView() {
             <button className="absolute top-4 right-4 p-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors z-10" onClick={() => setPreviewImage(null)}>
               <X className="w-6 h-6" />
             </button>
-            <motion.img initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} src={previewImage} alt="" className="max-w-full max-h-full object-contain rounded-lg" onClick={e => e.stopPropagation()} />
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="relative max-w-full max-h-full" onClick={e => e.stopPropagation()}>
+              <NextImage src={previewImage} alt="Image preview" layout="fill" objectFit="contain" className="rounded-lg" />
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

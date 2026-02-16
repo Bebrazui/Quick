@@ -1,8 +1,16 @@
 "use client";
 import { Zap, Users, MessageSquare, AtSign, Sun, Moon } from 'lucide-react';
 import { useTheme } from "next-themes";
+import React from 'react';
 
-function FeatureCard({ icon, title, children, color }) {
+interface FeatureCardProps {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+  color: string;
+}
+
+function FeatureCard({ icon, title, children, color }: FeatureCardProps) {
   return (
     <div className="bg-bg-secondary p-6 rounded-2xl border border-border transform hover:-translate-y-1 transition-transform duration-300 ease-in-out">
       <div className="flex items-start gap-4">

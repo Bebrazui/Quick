@@ -687,6 +687,9 @@ video {
 .top-4 {
   top: 1rem;
 }
+.left-2 {
+  left: 0.5rem;
+}
 .z-10 {
   z-index: 10;
 }
@@ -1089,6 +1092,9 @@ video {
 .rounded-3xl {
   border-radius: 1.5rem;
 }
+.rounded-sm {
+  border-radius: 0.125rem;
+}
 .rounded-t-2xl {
   border-top-left-radius: 1rem;
   border-top-right-radius: 1rem;
@@ -1232,6 +1238,10 @@ video {
 .bg-white\/15 {
   background-color: rgb(255 255 255 / 0.15);
 }
+.bg-yellow-300 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(253 224 71 / var(--tw-bg-opacity, 1));
+}
 .bg-gradient-to-br {
   background-image: linear-gradient(to bottom right, var(--tw-gradient-stops));
 }
@@ -1305,6 +1315,9 @@ video {
 .p-6 {
   padding: 1.5rem;
 }
+.p-0\.5 {
+  padding: 0.125rem;
+}
 .px-2 {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
@@ -1366,6 +1379,12 @@ video {
 }
 .pt-4 {
   padding-top: 1rem;
+}
+.pl-8 {
+  padding-left: 2rem;
+}
+.pr-8 {
+  padding-right: 2rem;
 }
 .text-left {
   text-align: left;
@@ -1472,6 +1491,10 @@ video {
 }
 .text-white\/80 {
   color: rgb(255 255 255 / 0.8);
+}
+.text-black {
+  --tw-text-opacity: 1;
+  color: rgb(0 0 0 / var(--tw-text-opacity, 1));
 }
 .accent-accent {
   accent-color: #7C3AED;

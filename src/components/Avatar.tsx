@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import NextImage from 'next/image';
 
 const GRADIENT_PAIRS = [
   ['#7c5cfc', '#22d3ee'],
@@ -40,11 +41,11 @@ interface AvatarProps {
 }
 
 const SIZE_MAP = {
-  xs: { outer: 'w-7 h-7', inner: 'w-6 h-6', text: 'text-[10px]', dot: 'w-2 h-2 -bottom-0 -right-0', border: '2px' },
-  sm: { outer: 'w-9 h-9', inner: 'w-8 h-8', text: 'text-xs', dot: 'w-2.5 h-2.5 -bottom-0 -right-0', border: '2px' },
-  md: { outer: 'w-11 h-11', inner: 'w-10 h-10', text: 'text-sm', dot: 'w-3 h-3 -bottom-0.5 -right-0.5', border: '2px' },
-  lg: { outer: 'w-16 h-16', inner: 'w-14 h-14', text: 'text-xl', dot: 'w-3.5 h-3.5 bottom-0 right-0', border: '3px' },
-  xl: { outer: 'w-24 h-24', inner: 'w-[86px] h-[86px]', text: 'text-3xl', dot: 'w-4 h-4 bottom-0.5 right-0.5', border: '3px' },
+  xs: { outer: 'w-7 h-7', inner: 'w-6 h-6', text: 'text-[10px]', dot: 'w-2 h-2 -bottom-0 -right-0', border: '2px', size: 24 },
+  sm: { outer: 'w-9 h-9', inner: 'w-8 h-8', text: 'text-xs', dot: 'w-2.5 h-2.5 -bottom-0 -right-0', border: '2px', size: 32 },
+  md: { outer: 'w-11 h-11', inner: 'w-10 h-10', text: 'text-sm', dot: 'w-3 h-3 -bottom-0.5 -right-0.5', border: '2px', size: 40 },
+  lg: { outer: 'w-16 h-16', inner: 'w-14 h-14', text: 'text-xl', dot: 'w-3.5 h-3.5 bottom-0 right-0', border: '3px', size: 56 },
+  xl: { outer: 'w-24 h-24', inner: 'w-[86px] h-[86px]', text: 'text-3xl', dot: 'w-4 h-4 bottom-0.5 right-0.5', border: '3px', size: 86 },
 };
 
 export default function Avatar({ pubkey, name, picture, size = 'md', showBorder = true, online, className = '' }: AvatarProps) {
@@ -77,9 +78,11 @@ export default function Avatar({ pubkey, name, picture, size = 'md', showBorder 
           } : {}}
         >
           {picture ? (
-            <img
+            <NextImage
               src={picture}
-              alt={name || ''}
+              alt={name || 'Avatar'}
+              width={s.size}
+              height={s.size}
               className="w-full h-full object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
