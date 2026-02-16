@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Camera, Check, ChevronLeft, Copy, Hash, LogOut, MessageCircle, Radio, Search, Settings, Trash2, UserPlus, Wifi, X } from 'lucide-react';
+import { Camera, Check, Copy, Hash, LogOut, MessageCircle, Radio, Search, Settings, Trash2, UserPlus, Wifi, X } from 'lucide-react';
 import { nostrClient, type Channel, type Contact } from '../lib/nostr';
 import {
   addChannel,
@@ -182,7 +182,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <motion.div initial={{ x: -320 }} animate={{ x: 0 }} className="w-80 h-full bg-bg-secondary border-r border-border flex flex-col shrink-0">
+      <motion.div initial={{ x: -320 }} animate={{ x: 0 }} className="w-full md:w-80 h-full bg-bg-secondary border-r border-border flex flex-col shrink-0">
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -196,14 +196,13 @@ export default function Sidebar() {
               <button onClick={() => setShowAddContact(true)} className="p-2 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text transition-colors" title="Add contact"><UserPlus className="w-4 h-4" /></button>
               <button onClick={() => setShowCreateChannel(true)} className="p-2 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text transition-colors" title="Create channel"><Hash className="w-4 h-4" /></button>
               <button onClick={() => setShowSettings(true)} className="p-2 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text transition-colors" title="Settings"><Settings className="w-4 h-4" /></button>
-              <button onClick={toggleSidebar} className="p-2 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text transition-colors lg:hidden"><ChevronLeft className="w-4 h-4" /></button>
             </div>
           </div>
 
           <button onClick={handleOpenProfile} className="w-full flex items-center gap-2.5 px-2 py-2 bg-bg-tertiary hover:bg-bg-hover rounded-lg transition-colors">
             <Avatar pubkey={nostrClient.publicKey} name={profileName} picture={profilePicture} size="sm" showBorder />
             <div className="flex-1 min-w-0 text-left">
-              <p className="text-xs font-medium text-text truncate">{profileName || nostrClient.shortenKey(nostrClient.publicKey)}</p>
+              <p className="text-sm font-medium text-text truncate">{profileName || nostrClient.shortenKey(nostrClient.publicKey)}</p>
               <p className="text-[10px] text-text-muted font-mono truncate">{nostrClient.shortenKey(nostrClient.publicKey)}</p>
             </div>
             <button onClick={(e) => { e.stopPropagation(); handleCopyPubkey(); }} className="p-1 rounded hover:bg-bg-active transition-colors" title="Copy key">
@@ -228,10 +227,7 @@ export default function Sidebar() {
                   key={contact.pubkey}
                   contact={contact}
                   isActive={activeChat === contact.pubkey}
-                  onClick={() => {
-                    setActiveChat(contact.pubkey);
-                    if (window.innerWidth < 1024) toggleSidebar();
-                  }}
+                  onClick={() => setActiveChat(contact.pubkey)}
                   onRemove={() => removeContact(contact.pubkey)}
                 />
               ))}
@@ -252,10 +248,7 @@ export default function Sidebar() {
               {filteredChannels.map(channel => (
                 <button
                   key={channel.id}
-                  onClick={() => {
-                    setActiveChat(`channel:${channel.id}`);
-                    if (window.innerWidth < 1024) toggleSidebar();
-                  }}
+                  onClick={() => setActiveChat(`channel:${channel.id}`)}
                   className={`w-full flex items-center gap-2 px-4 py-2.5 text-left transition-colors ${activeChat === `channel:${channel.id}` ? 'bg-accent/10 border-r-2 border-accent' : 'hover:bg-bg-hover'}`}
                 >
                   <Hash className="w-4 h-4 text-cyan shrink-0" />

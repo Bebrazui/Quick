@@ -57,6 +57,11 @@ export function setActiveChat(pubkey: string | null) {
   notify();
 }
 
+export function goBackToSidebar() {
+  state = { ...state, activeChat: null };
+  notify();
+}
+
 export function setLoggedIn(value: boolean) {
   state = { ...state, isLoggedIn: value };
   notify();

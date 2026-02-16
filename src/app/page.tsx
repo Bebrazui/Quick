@@ -10,7 +10,7 @@ import CallOverlay from "@/components/CallOverlay";
 import { Welcome } from "@/components/Welcome";
 
 export default function HomePage() {
-  const { isLoggedIn, activeChat, showSidebar } = useAppState();
+  const { isLoggedIn, activeChat } = useAppState();
 
   useEffect(() => {
     const autoLogin = async () => {
@@ -28,11 +28,23 @@ export default function HomePage() {
   }
 
   return (
-    <main className="flex h-screen w-screen bg-bg text-text">
-      {showSidebar && <Sidebar />}
-      <div className={`flex-1 flex flex-col ${showSidebar ? "w-[calc(100vw-320px)]" : "w-full"}`}>
+    <main className="flex h-screen w-screen overflow-hidden bg-bg text-text">
+      {/* Sidebar */}
+      <div
+        className={`${
+          activeChat ? 'hidden' : 'block w-full'
+        } md:block md:w-80 md:flex-shrink-0`}
+      >
+        <Sidebar />
+      </div>
+
+      {/* Main Content (Chat or Welcome) */}
+      <div
+        className={`flex-1 flex-col ${activeChat ? 'flex' : 'hidden'} md:flex`}
+      >
         {activeChat ? <ChatView /> : <Welcome />}
       </div>
+
       <CallOverlay />
     </main>
   );

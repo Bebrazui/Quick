@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  ArrowLeft,
   Check,
   Copy,
   Download,
@@ -23,6 +24,7 @@ import {
   addMessage,
   getChannelMessages,
   getMessages,
+  goBackToSidebar,
   toggleSidebar,
   updateContactProfile,
   useAppState,
@@ -225,7 +227,10 @@ export default function ChatView() {
   return (
     <div className="flex-1 flex flex-col bg-bg h-full">
       <div className="px-4 py-3 border-b border-border bg-bg-secondary/50 backdrop-blur-sm flex items-center gap-3">
-        <button onClick={toggleSidebar} className="p-2 rounded-lg hover:bg-bg-hover text-text-secondary lg:hidden">
+        <button onClick={goBackToSidebar} className="p-2 rounded-lg hover:bg-bg-hover text-text-secondary md:hidden">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <button onClick={toggleSidebar} className="p-2 rounded-lg hover:bg-bg-hover text-text-secondary hidden lg:block">
           <Menu className="w-5 h-5" />
         </button>
 
