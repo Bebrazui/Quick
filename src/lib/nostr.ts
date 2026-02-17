@@ -110,6 +110,7 @@ export interface WebRTCSignal {
   sdp?: string;
   candidate?: RTCIceCandidateInit;
   callType?: 'audio' | 'video';
+  callId?: string;
 }
 
 class NostrClient {
@@ -262,7 +263,7 @@ class NostrClient {
               return;
             }
             if (['webrtc-offer','webrtc-answer','webrtc-ice','call-request','call-accept','call-reject','call-end'].includes(mt)) {
-            this.signalCallbacks.forEach(cb => cb(event.pubkey, { type: mt, sdp: p.sdp, candidate: p.candidate, callType: p.callType }));
+            this.signalCallbacks.forEach(cb => cb(event.pubkey, { type: mt, sdp: p.sdp, candidate: p.candidate, callType: p.callType, callId: p.callId }));
             return;
           }
           if (mt === 'file-chunk') { this.handleFileChunk(event.id, event.pubkey, pTag[1], event.created_at * 1000, p); return; }
@@ -555,7 +556,7 @@ class NostrClient {
   }
 
   async sendWebRTCSignal(recipientPubkey: string, signal: WebRTCSignal) {
-    await this.sendEncryptedPayload(recipientPubkey, JSON.stringify({ _nostr_msg_type: signal.type, sdp: signal.sdp, candidate: signal.candidate, callType: signal.callType }));
+    await this.sendEncryptedPayload(recipientPubkey, JSON.stringify({ _nostr_msg_type: signal.type, sdp: signal.sdp, candidate: signal.candidate, callType: signal.callType, callId: signal.callId }));
   }
 
   async createChannel(name: string, about?: string): Promise<Channel> {

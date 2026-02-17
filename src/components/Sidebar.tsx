@@ -199,7 +199,7 @@ export default function Sidebar() {
             </div>
           </div>
 
-          <button onClick={handleOpenProfile} className="w-full flex items-center gap-2.5 px-2 py-2 bg-bg-tertiary hover:bg-bg-hover rounded-lg transition-colors">
+          <div onClick={handleOpenProfile} className="w-full flex items-center gap-2.5 px-2 py-2 bg-bg-tertiary hover:bg-bg-hover rounded-lg transition-colors cursor-pointer">
             <Avatar pubkey={nostrClient.publicKey} name={profileName} picture={profilePicture} size="sm" showBorder />
             <div className="flex-1 min-w-0 text-left">
               <p className="text-sm font-medium text-text truncate">{profileName || nostrClient.shortenKey(nostrClient.publicKey)}</p>
@@ -208,7 +208,7 @@ export default function Sidebar() {
             <button onClick={(e) => { e.stopPropagation(); handleCopyPubkey(); }} className="p-1 rounded hover:bg-bg-active transition-colors" title="Copy key">
               {copied ? <Check className="w-3 h-3 text-green" /> : <Copy className="w-3 h-3 text-text-muted" />}
             </button>
-          </button>
+          </div>
 
           <div className="relative mt-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />

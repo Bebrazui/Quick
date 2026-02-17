@@ -30,6 +30,8 @@ const ICE_CONFIG: RTCConfiguration = {
   iceCandidatePoolSize: 10,
 };
 
+const LS_STALE_CALL_KEY = 'nostr_call_ringing';
+
 class WebRTCManager {
   private pc: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
@@ -81,7 +83,7 @@ class WebRTCManager {
       this.audioOsc.start();
       const ctx = this.audioCtx;
       const pulse = () => {
-        if (this._callState !== 'ringing' || !this.audioCtx) { try { this.audioOsc?.stop(); ctx.close(); } catch {} return; }
+        if (this._callState !== 'ringing' || !this.audioCtx) { try { this.audioOsc?.stop(); } catch {} return; }
         gain.gain.setValueAtTime(0.08, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
         setTimeout(pulse, 1200);
@@ -99,12 +101,26 @@ class WebRTCManager {
 
   init() {
     if (this._unsubSignal) return;
+
+    try {
+      const staleCallJSON = localStorage.getItem(LS_STALE_CALL_KEY);
+      if (staleCallJSON) {
+        localStorage.removeItem(LS_STALE_CALL_KEY);
+        const staleCall = JSON.parse(staleCallJSON);
+        if (staleCall && staleCall.caller && (Date.now() - staleCall.time < 45000)) {
+          nostrClient.sendWebRTCSignal(staleCall.caller, { type: 'call-reject' }).catch(() => {});
+        }
+      }
+    } catch (e) {
+      localStorage.removeItem(LS_STALE_CALL_KEY);
+    }
+
     this._unsubSignal = nostrClient.onSignal((from, signal) => { this.handleSignal(from, signal); });
   }
 
   destroy() {
     if (this._unsubSignal) { this._unsubSignal(); this._unsubSignal = null; }
-    this.cleanup(false);
+    this.endCall();
   }
 
   private async handleSignal(from: string, signal: WebRTCSignal) {
@@ -117,6 +133,9 @@ class WebRTCManager {
         this._remotePubkey = from;
         this._callType = signal.callType || 'audio';
         this.setState('ringing');
+        try {
+          localStorage.setItem(LS_STALE_CALL_KEY, JSON.stringify({ caller: from, time: Date.now() }));
+        } catch {}
         this.playRingtone();
         this.callTimeout = setTimeout(() => { if (this._callState === 'ringing') this.rejectCall(); }, 45000);
         break;
@@ -205,6 +224,7 @@ class WebRTCManager {
 
   async acceptCall() {
     if (this._callState !== 'ringing' || !this._remotePubkey) return;
+    try { localStorage.removeItem(LS_STALE_CALL_KEY); } catch {}
     this.clearCallTimeout();
     this.stopRingtone();
     this.setState('connecting');
@@ -357,6 +377,7 @@ class WebRTCManager {
   }
 
   private cleanup(silent: boolean) {
+    try { localStorage.removeItem(LS_STALE_CALL_KEY); } catch {}
     this.clearCallTimeout();
     this.clearRetry();
     this.stopRingtone();
